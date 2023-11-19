@@ -7,20 +7,70 @@ import sys
 
 import pygame
 from pygame import *
-pygame.init()
-joysticks = []
+
 
 game_list=[]
 game_index=0
 num_game=0
-
-clock = pygame.time.Clock()
+worker=None
 keepPlaying = True
+
+class Signals(QObject):
+    close = pyqtSignal(int)
+
+class Worker(QRunnable):
+    def __init__(self):
+        super().__init__()
+        self.signals = Signals()
+        self.signals.close.connect(self.update)
+
+    def update(self):
+        global keepPlaying
+        keepPlaying = False
+
+    @pyqtSlot()
+    def run(self):
+        global keepPlaying, game_list, game_index
+        joystick_preset = False
+        pygame.init()
+        clock = pygame.time.Clock()
+        joysticks = []
+    # for al the connected joysticks
+        for i in range(0, pygame.joystick.get_count()):
+        # create an Joystick object in our list
+            joysticks.append(pygame.joystick.Joystick(i))
+        # initialize the appended joystick (-1 means last array item)
+            joysticks[-1].init()
+        # print a statement telling what the name of the controller is
+            print ("Detected joystick " + joysticks[-1].get_name())
+            joystick_preset=True
+        while keepPlaying and joystick_preset:
+            clock.tick(20)
+            for event in pygame.event.get():
+                if event.type == pygame.JOYBUTTONUP:
+                    game_list[game_index].action()
+                    #keepPlaying = False
+                #print("Joystick button UP released.")
+
+                if event.type == pygame.JOYHATMOTION:
+                    i=joysticks[-1].get_hat(0)
+                    if i[0] == -1:
+                        game_list[game_index].setStyleSheet(game_list[game_index].uncover)
+                        game_index = (game_index-1)%(num_game+2)
+                        game_list[game_index].setStyleSheet(game_list[game_index].cover)
+                    if i[0] == 1:
+                        game_list[game_index].setStyleSheet(game_list[game_index].uncover)
+                        game_index = (game_index+1)%(num_game+2)
+                        game_list[game_index].setStyleSheet(game_list[game_index].cover)
+
  
 class Window(QWidget):
     def __init__(self):
-        global num_game, game_list
+        global num_game, game_list, worker
         super().__init__()
+        pool = QThreadPool.globalInstance()
+        worker = Worker()
+        pool.start(worker)
 
         self.centralwidget = QWidget()
         grid=QGridLayout(self.centralwidget)
@@ -117,9 +167,10 @@ class Window(QWidget):
         print(game_list[game_index].name)
  
     def btnexit(self):
-        global keepPlaying
+        global keepPlaying, worker
         keepPlaying = False
         self.label.setText("Spegnimento in corso...")
+        worker.signals.close.emit(False)
         self.close()
 
     def update_game(self):
@@ -148,35 +199,5 @@ class Window(QWidget):
 if __name__ == "__main__":
     App = QApplication(sys.argv)
     window = Window()
-    joystick_preset = False
-    
-    # for al the connected joysticks
-    for i in range(0, pygame.joystick.get_count()):
-        # create an Joystick object in our list
-        joysticks.append(pygame.joystick.Joystick(i))
-        # initialize the appended joystick (-1 means last array item)
-        joysticks[-1].init()
-        # print a statement telling what the name of the controller is
-        print ("Detected joystick " + joysticks[-1].get_name())
-        joystick_preset=True
-    while keepPlaying and joystick_preset: #TODO problema più grande di tutto ciò...sta roba rimane sempre in esecuzione
-        clock.tick(60)
-        for event in pygame.event.get():
-            if event.type == pygame.JOYBUTTONUP:
-                game_list[game_index].action()
-                keepPlaying = False
-                #print("Joystick button UP released.")
-
-            if event.type == pygame.JOYHATMOTION:
-                i=joysticks[-1].get_hat(0)
-                if i[0] == -1:
-                    game_list[game_index].setStyleSheet(game_list[game_index].uncover)
-                    game_index = (game_index-1)%(num_game+2)
-                    game_list[game_index].setStyleSheet(game_list[game_index].cover)
-                if i[0] == 1:
-                    game_list[game_index].setStyleSheet(game_list[game_index].uncover)
-                    game_index = (game_index+1)%(num_game+2)
-                    game_list[game_index].setStyleSheet(game_list[game_index].cover)
-                
 
     sys.exit(App.exec())
