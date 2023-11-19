@@ -5,7 +5,7 @@ Interfaccia per itchbox [carlominucci/itchbox](https://github.com/carlominucci/i
 Versione embrionale in sviluppo, scritta da un novellino principiante. Se ne sconsiglia l'utilizzo.
 
 Richiede python3, PyQt5 e pygame
-```python
+```shell
 sudo apt install python3
 sudo apt install python3-pip
 pip install PyQt5
