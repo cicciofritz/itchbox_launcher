@@ -4,19 +4,35 @@ from PyQt5.QtCore import *
 from PyQt5 import *
 
 import sys
+import urllib.request
+import re
 
 import pygame
 from pygame import *
 
+from PIL import Image
 
 game_list=[]
 game_index=0
 num_game=0
 worker=None
 keepPlaying = True
+grid=None
 
 class Signals(QObject):
     close = pyqtSignal(int)
+    direction = pyqtSignal(int)
+    launch = pyqtSignal(int)
+
+class GameObj(QPushButton):
+    def __init__(self):
+        super().__init__()
+        self.index = 0
+        self.image = ""
+        self.cover = ""
+        self.uncover = ""
+        self.command = ""
+        self.action = None
 
 class Worker(QRunnable):
     def __init__(self):
@@ -48,35 +64,30 @@ class Worker(QRunnable):
             clock.tick(20)
             for event in pygame.event.get():
                 if event.type == pygame.JOYBUTTONUP:
-                    game_list[game_index].action()
+                    self.signals.launch.emit(1)
                     #keepPlaying = False
-                #print("Joystick button UP released.")
 
                 if event.type == pygame.JOYHATMOTION:
                     i=joysticks[-1].get_hat(0)
-                    if i[0] == -1:
-                        game_list[game_index].setStyleSheet(game_list[game_index].uncover)
-                        game_index = (game_index-1)%(num_game+2)
-                        game_list[game_index].setStyleSheet(game_list[game_index].cover)
-                    if i[0] == 1:
-                        game_list[game_index].setStyleSheet(game_list[game_index].uncover)
-                        game_index = (game_index+1)%(num_game+2)
-                        game_list[game_index].setStyleSheet(game_list[game_index].cover)
+                    if i[0] != 0:
+                        self.signals.direction.emit(i[0])
 
  
 class Window(QWidget):
     def __init__(self):
-        global num_game, game_list, worker
+        global num_game, game_list, worker, grid
         super().__init__()
         pool = QThreadPool.globalInstance()
         worker = Worker()
         pool.start(worker)
+        worker.signals.direction.connect(self.navigation)
+        worker.signals.launch.connect(self.start_game)
 
         self.centralwidget = QWidget()
         grid=QGridLayout(self.centralwidget)
-        grid.setRowStretch(0, 1)
-        grid.setRowStretch(1, 2)
-        grid.setRowStretch(2, 1)
+        #grid.setRowStretch(0, 1)
+        #grid.setRowStretch(1, 2)
+        #grid.setRowStretch(2, 1)
 
         oImage = QImage("sfondo.jpg")
         #sImage = oImage.scaledToWidth(self.frameGeometry().width())                   # resize Image to widgets size
@@ -100,39 +111,10 @@ class Window(QWidget):
         self.label.setMinimumSize(100, 100) 
         grid.addWidget(self.label, 2, 0,  Qt.AlignLeft)
 
-        for i in range(0,3):
-            game = QPushButton("")
-            #da sostituire con dati da csv
-            if i == 0:
-                game.name = "Bloodborne"
-                game.cover = "border-image: url(img1.png);"
-                game.uncover = "border-image: url(img1_.png);"
-                game.command = ""
-            elif i==1:
-                game.name = "Super Mario"
-                game.cover = "border-image: url(img2.png);"
-                game.uncover = "border-image: url(img2_.png);"
-                game.command = ""
-            elif i==2:
-                game.name = "Indy Heat"
-                game.cover = "border-image: url(img3.png);"
-                game.uncover = "border-image: url(img3_.png);"
-                game.command = ""
-            
-            game.index = i
-            game.setStyleSheet(game.uncover)
-            game.action = self.start_game #(self.label.setText("Avvio di "+ button1.name + "..."), print("Avvio di "+ button1.name + "..."))
-            game.clicked.connect(game.action)
-            game.installEventFilter(self)
-            game.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-            game_list.append(game)
-            grid.addWidget(game, 1, i)
+        num_game=self.parse_csv()
 
-        num_game=i+1
-        #print(str(num_game))
-
-        buttonupd = QPushButton("")
-        buttonupd.index = i+1
+        buttonupd = GameObj()
+        buttonupd.index = num_game
         buttonupd.cover = "border-image: url(aggiorna.png);"
         buttonupd.uncover = "border-image: url(aggiorna_.png);"
         buttonupd.setStyleSheet(buttonupd.uncover)
@@ -143,8 +125,8 @@ class Window(QWidget):
         grid.addWidget(buttonupd, 2, 3)
         game_list.append(buttonupd)
 
-        buttonexit = QPushButton("")
-        buttonexit.index = i+2
+        buttonexit = GameObj()
+        buttonexit.index = num_game+1
         buttonexit.cover = "border-image: url(spegni128.png);"
         buttonexit.uncover = "border-image: url(spegni128_.png);"
         buttonexit.setStyleSheet(buttonexit.uncover)
@@ -159,7 +141,6 @@ class Window(QWidget):
         self.setLayout(grid)
         self.show()
         #self.showFullScreen()
-
 
     def start_game(self):
         #run game_list[game_index].command
@@ -195,6 +176,54 @@ class Window(QWidget):
             game_list[game_index].setStyleSheet(game_list[game_index].cover)
             return True
         return False
+
+    def navigation(self, direction):
+        global game_index, game_list, grid
+        if direction == -1:
+            game_list[game_index].setStyleSheet(game_list[game_index].uncover)
+            game_index = (game_index-1)%(num_game+2)
+            game_list[game_index].setStyleSheet(game_list[game_index].cover)
+        if direction == 1:
+            game_list[game_index].setStyleSheet(game_list[game_index].uncover)
+            game_index = (game_index+1)%(num_game+2)
+            game_list[game_index].setStyleSheet(game_list[game_index].cover)
+
+    def parse_csv(self):
+        file1 = open('lista.csv', 'r')
+        i = 0
+
+        for line in file1:
+            game = GameObj()
+            name = line.split(',')[0]
+            game.index = i
+            game.image = self.retrieveCover(name)
+            game.cover = str("border-image: url(" + game.image + ");")
+            img = Image.open(game.image).convert('L')
+            img.save(str("_" + game.image))
+            game.uncover = str("border-image: url(_" + game.image + ");")
+            game.command = line.split(',')[1]
+            game.setStyleSheet(game.uncover)
+            game.action = self.start_game
+            game.clicked.connect(game.action)
+            game.installEventFilter(self)
+            game.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            game_list.append(game)
+            grid.addWidget(game_list[i], int(i/4), int(i%4))
+            i += 1
+
+        file1.close()
+        return i;
+
+    def retrieveCover(self, name):
+        name_plus = re.sub('( )', '+', name, 0, re.MULTILINE)
+        name_plus = str("https://itch.io/search?q=" + name_plus + "\"")
+        contents = urllib.request.urlopen(name_plus).read()
+        x = re.search("(?<=data-lazy_src=\")(.*?)(?=\")", str(contents)).group()
+        name_under = re.sub('( )', '_', name, 0, re.MULTILINE)
+        image_name=str( name_under + "." + x.split(".")[-1])
+
+        urllib.request.urlretrieve(x, image_name)
+        return image_name
 
 if __name__ == "__main__":
     App = QApplication(sys.argv)
