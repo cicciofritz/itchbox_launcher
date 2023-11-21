@@ -4,7 +4,7 @@ from PyQt5.QtCore import *
 from PyQt5 import *
 
 import sys
-import urllib.request
+#import urllib.request
 import re
 
 import pygame
@@ -73,17 +73,11 @@ class Worker(QRunnable):
                     i=joysticks[-1].get_hat(0)
                     if i[0] != 0:
                         self.signals.direction.emit(i[0])
-
  
 class Window(QWidget):
     def __init__(self):
         global num_game, game_list, worker, grid, message
         super().__init__()
-        pool = QThreadPool.globalInstance()
-        worker = Worker()
-        pool.start(worker)
-        worker.signals.direction.connect(self.navigation)
-        worker.signals.launch.connect(self.start_game)
 
         self.centralwidget = QWidget()
         grid=QGridLayout(self.centralwidget)
@@ -118,33 +112,16 @@ class Window(QWidget):
 
         num_game=self.parse_csv()
 
-        buttonupd = GameObj()
-        buttonupd.index = num_game
-        buttonupd.cover = "border-image: url(aggiorna.png);"
-        buttonupd.uncover = "border-image: url(aggiorna_.png);"
-        buttonupd.setStyleSheet(buttonupd.uncover)
-        buttonupd.setIconSize(QSize(60, 60))
-        buttonupd.action = self.update_game
-        buttonupd.clicked.connect(buttonupd.action)
-        buttonupd.installEventFilter(self)
-        grid.addWidget(buttonupd, 2, 5)
-        game_list.append(buttonupd)
-
-        buttonexit = GameObj()
-        buttonexit.index = num_game+1
-        buttonexit.cover = "border-image: url(spegni128.png);"
-        buttonexit.uncover = "border-image: url(spegni128_.png);"
-        buttonexit.setStyleSheet(buttonexit.uncover)
-        buttonexit.setIconSize(QSize(60, 60))
-        buttonexit.action = self.btnexit
-        buttonexit.clicked.connect(buttonexit.action)
-        buttonexit.action = self.btnexit
-        buttonexit.installEventFilter(self)
-        grid.addWidget(buttonexit, 2, 6)
-        game_list.append(buttonexit)
-
         self.setLayout(grid)
         self.show()
+
+        #avvio thread gestione controller
+        pool = QThreadPool.globalInstance()
+        worker = Worker()
+        pool.start(worker)
+        worker.signals.direction.connect(self.navigation)
+        worker.signals.launch.connect(self.start_game)
+
         #self.showFullScreen()
 
     def start_game(self):
@@ -186,7 +163,7 @@ class Window(QWidget):
     def navigation(self, direction):
         global game_index, game_list
         game_list[game_index].setStyleSheet(game_list[game_index].uncover)
-        game_index = (game_index + direction)%(num_game+2)
+        game_index = (game_index + direction)%(num_game)
         game_list[game_index].setStyleSheet(game_list[game_index].cover)
         message.setText(game_list[game_index].name)
 
@@ -198,11 +175,16 @@ class Window(QWidget):
             game = GameObj()
             game.name = line.split(',')[0]
             game.index = i
-            game.image = self.retrieveCover(game.name)
+            game.image = line.split(',')[2].strip() #self.retrieveCover(game.name)
+            img = Image.open(str("data/" + game.image)).convert('L')
+            img.save(str("data/_" + game.image))
             game.cover = str("border-image: url(data/" + game.image + ");")
             game.uncover = str("border-image: url(data/_" + game.image + ");")
             game.command = line.split(',')[1]
-            game.setStyleSheet(game.uncover)
+            if i == 0:
+                game.setStyleSheet(game.cover)
+            else:
+                game.setStyleSheet(game.uncover)
             game.action = self.start_game
             game.clicked.connect(game.action)
             game.installEventFilter(self)
@@ -212,23 +194,55 @@ class Window(QWidget):
             i += 1
 
         file1.close()
+
+        buttonupd = GameObj()
+        buttonupd.name = "Aggiorna"
+        buttonupd.index = i
+        buttonupd.cover = "border-image: url(aggiorna.png);"
+        buttonupd.uncover = "border-image: url(aggiorna_.png);"
+        buttonupd.setStyleSheet(buttonupd.uncover)
+        buttonupd.setIconSize(QSize(60, 60))
+        buttonupd.action = self.update_game
+        buttonupd.clicked.connect(buttonupd.action)
+        buttonupd.installEventFilter(self)
+        game_list.append(buttonupd)
+        grid.addWidget(game_list[i], 2, 5)
+        
+        i += 1
+
+        buttonexit = GameObj()
+        buttonexit.name = "Spegni"
+        buttonexit.index = i
+        buttonexit.cover = "border-image: url(spegni128.png);"
+        buttonexit.uncover = "border-image: url(spegni128_.png);"
+        buttonexit.setStyleSheet(buttonexit.uncover)
+        buttonexit.setIconSize(QSize(60, 60))
+        buttonexit.action = self.btnexit
+        buttonexit.clicked.connect(buttonexit.action)
+        buttonexit.action = self.btnexit
+        buttonexit.installEventFilter(self)
+        game_list.append(buttonexit)
+        grid.addWidget(game_list[i], 2, 6)
+        
+        i += 1
+
         return i
 
-    def retrieveCover(self, name):
-        try:
-            name_plus = re.sub('( )', '+', name, 0, re.MULTILINE)
-            name_plus = str("https://itch.io/search?q=" + name_plus + "\"")
-            contents = urllib.request.urlopen(name_plus).read()
-            x = re.search("(?<=data-lazy_src=\")(.*?)(?=\")", str(contents)).group()
-            name_under = re.sub('( )', '_', name, 0, re.MULTILINE)
-            image_name=str( name_under + "." + x.split(".")[-1])
+    # def retrieveCover(self, name):
+    #     try:
+    #         name_plus = re.sub('( )', '+', name, 0, re.MULTILINE)
+    #         name_plus = str("https://itch.io/search?q=" + name_plus + "\"")
+    #         contents = urllib.request.urlopen(name_plus).read()
+    #         x = re.search("(?<=data-lazy_src=\")(.*?)(?=\")", str(contents)).group()
+    #         name_under = re.sub('( )', '_', name, 0, re.MULTILINE)
+    #         image_name=str( name_under + "." + x.split(".")[-1])
 
-            urllib.request.urlretrieve(x, str("data/" + image_name))
-            img = Image.open(str("data/" + image_name)).convert('L')
-            img.save(str("data/_" + image_name))
-        except:
-            image_name = "empty"
-        return image_name
+    #         urllib.request.urlretrieve(x, str("data/" + image_name))
+    #         img = Image.open(str("data/" + image_name)).convert('L')
+    #         img.save(str("data/_" + image_name))
+    #     except:
+    #         image_name = "empty"
+    #     return image_name
 
 if __name__ == "__main__":
     App = QApplication(sys.argv)
