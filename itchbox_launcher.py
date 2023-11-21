@@ -14,6 +14,7 @@ from PIL import Image
 
 game_list=[]
 game_index=0
+message=0
 num_game=0
 worker=None
 keepPlaying = True
@@ -28,6 +29,7 @@ class GameObj(QPushButton):
     def __init__(self):
         super().__init__()
         self.index = 0
+        self.name = ""
         self.image = ""
         self.cover = ""
         self.uncover = ""
@@ -75,7 +77,7 @@ class Worker(QRunnable):
  
 class Window(QWidget):
     def __init__(self):
-        global num_game, game_list, worker, grid
+        global num_game, game_list, worker, grid, message
         super().__init__()
         pool = QThreadPool.globalInstance()
         worker = Worker()
@@ -105,11 +107,14 @@ class Window(QWidget):
         self.setObjectName('MainWindow')
         self.setWindowIcon(QIcon("itchbox128.png"))
         self.setGeometry(self.left, self.top, self.width, self.height)
-        self.label = QLabel(self)
-        self.label.setFont(QFont("Sanserif", 10))
-        self.label.setStyleSheet("color: white;")
-        self.label.setMinimumSize(100, 100) 
-        grid.addWidget(self.label, 2, 0,  Qt.AlignLeft)
+
+        # Riquadro di testo
+        message = QLabel(self)
+        message.setFont(QFont("Sanserif", 10))
+        message.setStyleSheet("color: white;")
+        message.setMinimumSize(100, 100) 
+
+        grid.addWidget(message, 2, 0,  Qt.AlignLeft)
 
         num_game=self.parse_csv()
 
@@ -122,7 +127,7 @@ class Window(QWidget):
         buttonupd.action = self.update_game
         buttonupd.clicked.connect(buttonupd.action)
         buttonupd.installEventFilter(self)
-        grid.addWidget(buttonupd, 2, 3)
+        grid.addWidget(buttonupd, 2, 5)
         game_list.append(buttonupd)
 
         buttonexit = GameObj()
@@ -135,7 +140,7 @@ class Window(QWidget):
         buttonexit.clicked.connect(buttonexit.action)
         buttonexit.action = self.btnexit
         buttonexit.installEventFilter(self)
-        grid.addWidget(buttonexit, 2, 4)
+        grid.addWidget(buttonexit, 2, 6)
         game_list.append(buttonexit)
 
         self.setLayout(grid)
@@ -143,21 +148,21 @@ class Window(QWidget):
         #self.showFullScreen()
 
     def start_game(self):
+        global message
         #run game_list[game_index].command
-        self.label.setText("Avvio di "+ game_list[game_index].name + "...")
+        message.setText("Avvio di "+ game_list[game_index].name + "...")
         print(game_list[game_index].name)
  
     def btnexit(self):
-        global keepPlaying, worker
+        global keepPlaying, worker, message
         keepPlaying = False
-        self.label.setText("Spegnimento in corso...")
+        message.setText("Spegnimento in corso...")
         worker.signals.close.emit(False)
         self.close()
 
     def update_game(self):
-        global game_list
-        self.label.setText("Aggiornamento in corso...")
-        game_list=[]
+        global game_list, message
+        message.setText("Aggiornamento in corso...")
         self.close()
         self.__init__() 
 
@@ -169,24 +174,21 @@ class Window(QWidget):
                 self.showFullScreen()
 
     def eventFilter(self, object, event):
-        global game_index
+        global game_index, game_list
         if event.type() == QEvent.HoverMove:
             game_list[game_index].setStyleSheet(game_list[game_index].uncover)
             game_index = object.index
             game_list[game_index].setStyleSheet(game_list[game_index].cover)
+            message.setText(game_list[game_index].name)
             return True
         return False
 
     def navigation(self, direction):
-        global game_index, game_list, grid
-        if direction == -1:
-            game_list[game_index].setStyleSheet(game_list[game_index].uncover)
-            game_index = (game_index-1)%(num_game+2)
-            game_list[game_index].setStyleSheet(game_list[game_index].cover)
-        if direction == 1:
-            game_list[game_index].setStyleSheet(game_list[game_index].uncover)
-            game_index = (game_index+1)%(num_game+2)
-            game_list[game_index].setStyleSheet(game_list[game_index].cover)
+        global game_index, game_list
+        game_list[game_index].setStyleSheet(game_list[game_index].uncover)
+        game_index = (game_index + direction)%(num_game+2)
+        game_list[game_index].setStyleSheet(game_list[game_index].cover)
+        message.setText(game_list[game_index].name)
 
     def parse_csv(self):
         file1 = open('lista.csv', 'r')
@@ -194,13 +196,11 @@ class Window(QWidget):
 
         for line in file1:
             game = GameObj()
-            name = line.split(',')[0]
+            game.name = line.split(',')[0]
             game.index = i
-            game.image = self.retrieveCover(name)
-            game.cover = str("border-image: url(" + game.image + ");")
-            img = Image.open(game.image).convert('L')
-            img.save(str("_" + game.image))
-            game.uncover = str("border-image: url(_" + game.image + ");")
+            game.image = self.retrieveCover(game.name)
+            game.cover = str("border-image: url(data/" + game.image + ");")
+            game.uncover = str("border-image: url(data/_" + game.image + ");")
             game.command = line.split(',')[1]
             game.setStyleSheet(game.uncover)
             game.action = self.start_game
@@ -212,17 +212,22 @@ class Window(QWidget):
             i += 1
 
         file1.close()
-        return i;
+        return i
 
     def retrieveCover(self, name):
-        name_plus = re.sub('( )', '+', name, 0, re.MULTILINE)
-        name_plus = str("https://itch.io/search?q=" + name_plus + "\"")
-        contents = urllib.request.urlopen(name_plus).read()
-        x = re.search("(?<=data-lazy_src=\")(.*?)(?=\")", str(contents)).group()
-        name_under = re.sub('( )', '_', name, 0, re.MULTILINE)
-        image_name=str( name_under + "." + x.split(".")[-1])
+        try:
+            name_plus = re.sub('( )', '+', name, 0, re.MULTILINE)
+            name_plus = str("https://itch.io/search?q=" + name_plus + "\"")
+            contents = urllib.request.urlopen(name_plus).read()
+            x = re.search("(?<=data-lazy_src=\")(.*?)(?=\")", str(contents)).group()
+            name_under = re.sub('( )', '_', name, 0, re.MULTILINE)
+            image_name=str( name_under + "." + x.split(".")[-1])
 
-        urllib.request.urlretrieve(x, image_name)
+            urllib.request.urlretrieve(x, str("data/" + image_name))
+            img = Image.open(str("data/" + image_name)).convert('L')
+            img.save(str("data/_" + image_name))
+        except:
+            image_name = "empty"
         return image_name
 
 if __name__ == "__main__":
