@@ -2,15 +2,12 @@ from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5 import *
+from itchbox_class import *
 
 import sys
-#import urllib.request
-import re
 
 import pygame
 from pygame import *
-
-from PIL import Image
 
 game_list=[]
 game_index=0
@@ -18,23 +15,13 @@ message=0
 num_game=0
 worker=None
 keepPlaying = True
-grid=None
+maingrid=None
+innergrid=None
 
 class Signals(QObject):
     close = pyqtSignal(int)
     direction = pyqtSignal(int)
     launch = pyqtSignal(int)
-
-class GameObj(QPushButton):
-    def __init__(self):
-        super().__init__()
-        self.index = 0
-        self.name = ""
-        self.image = ""
-        self.cover = ""
-        self.uncover = ""
-        self.command = ""
-        self.action = None
 
 class Worker(QRunnable):
 
@@ -55,13 +42,10 @@ class Worker(QRunnable):
         pygame.init()
         clock = pygame.time.Clock()
         joysticks = []
-    # for al the connected joysticks
+
         for i in range(0, pygame.joystick.get_count()):
-        # create an Joystick object in our list
             joysticks.append(pygame.joystick.Joystick(i))
-        # initialize the appended joystick (-1 means last array item)
             joysticks[-1].init()
-        # print a statement telling what the name of the controller is
             print ("Detected joystick " + joysticks[-1].get_name())
             joystick_present=True
         while keepPlaying and joystick_present:
@@ -69,24 +53,20 @@ class Worker(QRunnable):
             for event in pygame.event.get():
                 if event.type == pygame.JOYBUTTONUP:
                     self.signals.launch.emit(1)
-                    #self.signals.close.emit(False)
-                    keepPlaying = False
-
+                    #keepPlaying = False
                 if event.type == pygame.JOYHATMOTION:
                     i=joysticks[-1].get_hat(0)
                     if i[0] != 0:
                         self.signals.direction.emit(i[0])
+        pygame.joystick.quit()
  
 class Window(QWidget):
     def __init__(self):
-        global num_game, game_list, worker, grid, message
+        global num_game, game_list, worker, maingrid, message, innergrid
         super().__init__()
 
         self.centralwidget = QWidget()
-        grid=QGridLayout(self.centralwidget)
-        #grid.setRowStretch(0, 1)
-        #grid.setRowStretch(1, 2)
-        #grid.setRowStretch(2, 1)
+        maingrid=QGridLayout(self.centralwidget)
 
         oImage = QImage("sfondo.jpg")
         #sImage = oImage.scaledToWidth(self.frameGeometry().width())                   # resize Image to widgets size
@@ -106,42 +86,43 @@ class Window(QWidget):
         self.setGeometry(self.left, self.top, self.width, self.height)
 
         # Riquadro di testo
-        message = QLabel(self)
-        message.setFont(QFont("Sanserif", 10))
-        message.setStyleSheet("color: white;")
-        message.setMinimumSize(100, 100) 
+        message = TxtLabel()
+        maingrid.addWidget(message, 1, 0)
 
-        grid.addWidget(message, 2, 0)
+        #scroll area per le caselle con i giochi
+        self.innerwidget = QWidget()
+        innergrid=QGridLayout(self.innerwidget)
+        scrollArea = QScrollArea()
+        scrollArea.setWidget(self.innerwidget)
+        maingrid.addWidget(scrollArea, 0, 0)
 
         num_game=self.parse_csv()
 
-        self.setLayout(grid)
+        self.innerwidget.setMinimumSize(600,1000)
+        scrollArea.setLayout(innergrid)
+        self.setLayout(maingrid)
+        
         self.show()
-
-        #avvio thread gestione controller
-        self.pool = QThreadPool.globalInstance()
-        worker = Worker()
-        self.pool.start(worker)
-        worker.signals.direction.connect(self.navigation)
-        worker.signals.launch.connect(self.start_game)
+        self.innerwidget.show()
 
         #self.showFullScreen()
 
     def start_game(self):
         global message
         #run game_list[game_index].command
-        message.setText("Avvio di "+ game_list[game_index].name + "...")
+        message.textStart(game_list[game_index])
         print(game_list[game_index].name)
  
     def btnexit(self):
         global worker, message
-        message.setText("Spegnimento in corso...")
+        message.textStart(self)
         worker.signals.close.emit(False)
+        self.innerwidget.close()
         self.close()
 
     def update_game(self):
         global game_list, message
-        message.setText("Aggiornamento in corso...")
+        message.textStart(self)
         self.close()
         self.__init__() 
 
@@ -155,10 +136,10 @@ class Window(QWidget):
     def eventFilter(self, object, event):
         global game_index, game_list, worker
         if event.type() == QEvent.HoverMove:
-            game_list[game_index].setStyleSheet(game_list[game_index].uncover)
+            game_list[game_index].unmarkObj()
             game_index = object.index
-            game_list[game_index].setStyleSheet(game_list[game_index].cover)
-            message.setText(game_list[game_index].name)
+            game_list[game_index].markObj()
+            message.textShow(game_list[game_index])
             return True
         if event.type() == QEvent.FocusIn:
             self.pool = QThreadPool.globalInstance()
@@ -168,75 +149,41 @@ class Window(QWidget):
             worker.signals.launch.connect(self.start_game)
             return True
         if event.type() == QEvent.FocusOut:
-            worker.signals.close.emit()
-            return True       
-        
+            worker.signals.close.emit(False)
+            return True
         return False
-
 
     def navigation(self, direction):
         global game_index, game_list
-        game_list[game_index].setStyleSheet(game_list[game_index].uncover)
+        game_list[game_index].unmarkObj()
         game_index = (game_index + direction)%(num_game)
-        game_list[game_index].setStyleSheet(game_list[game_index].cover)
-        message.setText(game_list[game_index].name)
+        game_list[game_index].markObj()
+        message.textShow(game_list[game_index])
 
     def parse_csv(self):
+        global innergrid
         file1 = open('lista.csv', 'r')
         i = 0
 
         for line in file1:
-            game = GameObj()
-            game.name = line.split(',')[0]
-            game.index = i
-            game.image = line.split(',')[2].strip() #self.retrieveCover(game.name)
-            img = Image.open(str("data/" + game.image)).convert('L')
-            img.save(str("data/_" + game.image))
-            game.cover = str("border-image: url(data/" + game.image + ");")
-            game.uncover = str("border-image: url(data/_" + game.image + ");")
-            game.command = line.split(',')[1]
+            game = GameBtn(i, line.split(',')[0], line.split(',')[2].strip(), line.split(',')[1], self.start_game, self)
+
             if i == 0:
-                game.setStyleSheet(game.cover)
-            else:
-                game.setStyleSheet(game.uncover)
-            game.action = self.start_game
-            game.clicked.connect(game.action)
-            game.installEventFilter(self)
-            game.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+                game.markObj()
+
             game_list.append(game)
-            grid.addWidget(game_list[i], int(i/4), int(i%4))
+            innergrid.addWidget(game_list[i], int(i/3), int(i%3))
             i += 1
 
         file1.close()
 
-        buttonupd = GameObj()
-        buttonupd.name = "Aggiorna"
-        buttonupd.index = i
-        buttonupd.cover = "border-image: url(aggiorna.png);"
-        buttonupd.uncover = "border-image: url(aggiorna_.png);"
-        buttonupd.setStyleSheet(buttonupd.uncover)
-        buttonupd.setIconSize(QSize(60, 60))
-        buttonupd.action = self.update_game
-        buttonupd.clicked.connect(buttonupd.action)
-        buttonupd.installEventFilter(self)
-        game_list.append(buttonupd)
-        grid.addWidget(game_list[i], 2, 5)
+        game_list.append(UpdateBtn(i, self.update_game, self))
+        maingrid.addWidget(game_list[i], 1, 5)
         
         i += 1
 
-        buttonexit = GameObj()
-        buttonexit.name = "Spegni"
-        buttonexit.index = i
-        buttonexit.cover = "border-image: url(spegni128.png);"
-        buttonexit.uncover = "border-image: url(spegni128_.png);"
-        buttonexit.setStyleSheet(buttonexit.uncover)
-        buttonexit.setIconSize(QSize(60, 60))
-        buttonexit.action = self.btnexit
-        buttonexit.clicked.connect(buttonexit.action)
-        buttonexit.action = self.btnexit
-        buttonexit.installEventFilter(self)
-        game_list.append(buttonexit)
-        grid.addWidget(game_list[i], 2, 6)
+        game_list.append(ExitBtn(i, self.btnexit, self))
+        maingrid.addWidget(game_list[i], 1, 6)
         
         i += 1
 
