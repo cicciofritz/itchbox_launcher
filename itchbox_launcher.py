@@ -37,10 +37,11 @@ class GameObj(QPushButton):
         self.action = None
 
 class Worker(QRunnable):
+
     def __init__(self):
         super().__init__()
         self.signals = Signals()
-        self.signals.close.connect(self.update)
+        self.signals.close.connect(self.update) 
 
     def update(self):
         global keepPlaying
@@ -48,8 +49,9 @@ class Worker(QRunnable):
 
     @pyqtSlot()
     def run(self):
-        global keepPlaying, game_list, game_index
-        joystick_preset = False
+        global keepPlaying
+        joystick_present = False
+        keepPlaying = True
         pygame.init()
         clock = pygame.time.Clock()
         joysticks = []
@@ -61,13 +63,14 @@ class Worker(QRunnable):
             joysticks[-1].init()
         # print a statement telling what the name of the controller is
             print ("Detected joystick " + joysticks[-1].get_name())
-            joystick_preset=True
-        while keepPlaying and joystick_preset:
+            joystick_present=True
+        while keepPlaying and joystick_present:
             clock.tick(20)
             for event in pygame.event.get():
                 if event.type == pygame.JOYBUTTONUP:
                     self.signals.launch.emit(1)
-                    #keepPlaying = False
+                    #self.signals.close.emit(False)
+                    keepPlaying = False
 
                 if event.type == pygame.JOYHATMOTION:
                     i=joysticks[-1].get_hat(0)
@@ -108,7 +111,7 @@ class Window(QWidget):
         message.setStyleSheet("color: white;")
         message.setMinimumSize(100, 100) 
 
-        grid.addWidget(message, 2, 0,  Qt.AlignLeft)
+        grid.addWidget(message, 2, 0)
 
         num_game=self.parse_csv()
 
@@ -116,9 +119,9 @@ class Window(QWidget):
         self.show()
 
         #avvio thread gestione controller
-        pool = QThreadPool.globalInstance()
+        self.pool = QThreadPool.globalInstance()
         worker = Worker()
-        pool.start(worker)
+        self.pool.start(worker)
         worker.signals.direction.connect(self.navigation)
         worker.signals.launch.connect(self.start_game)
 
@@ -131,8 +134,7 @@ class Window(QWidget):
         print(game_list[game_index].name)
  
     def btnexit(self):
-        global keepPlaying, worker, message
-        keepPlaying = False
+        global worker, message
         message.setText("Spegnimento in corso...")
         worker.signals.close.emit(False)
         self.close()
@@ -151,14 +153,26 @@ class Window(QWidget):
                 self.showFullScreen()
 
     def eventFilter(self, object, event):
-        global game_index, game_list
+        global game_index, game_list, worker
         if event.type() == QEvent.HoverMove:
             game_list[game_index].setStyleSheet(game_list[game_index].uncover)
             game_index = object.index
             game_list[game_index].setStyleSheet(game_list[game_index].cover)
             message.setText(game_list[game_index].name)
             return True
+        if event.type() == QEvent.FocusIn:
+            self.pool = QThreadPool.globalInstance()
+            worker = Worker()
+            self.pool.start(worker)
+            worker.signals.direction.connect(self.navigation)
+            worker.signals.launch.connect(self.start_game)
+            return True
+        if event.type() == QEvent.FocusOut:
+            worker.signals.close.emit()
+            return True       
+        
         return False
+
 
     def navigation(self, direction):
         global game_index, game_list
@@ -227,22 +241,6 @@ class Window(QWidget):
         i += 1
 
         return i
-
-    # def retrieveCover(self, name):
-    #     try:
-    #         name_plus = re.sub('( )', '+', name, 0, re.MULTILINE)
-    #         name_plus = str("https://itch.io/search?q=" + name_plus + "\"")
-    #         contents = urllib.request.urlopen(name_plus).read()
-    #         x = re.search("(?<=data-lazy_src=\")(.*?)(?=\")", str(contents)).group()
-    #         name_under = re.sub('( )', '_', name, 0, re.MULTILINE)
-    #         image_name=str( name_under + "." + x.split(".")[-1])
-
-    #         urllib.request.urlretrieve(x, str("data/" + image_name))
-    #         img = Image.open(str("data/" + image_name)).convert('L')
-    #         img.save(str("data/_" + image_name))
-    #     except:
-    #         image_name = "empty"
-    #     return image_name
 
 if __name__ == "__main__":
     App = QApplication(sys.argv)
