@@ -2,7 +2,7 @@ from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5 import *
-from itchbox_class import *
+from PIL import Image
 
 import sys, subprocess
 
@@ -17,7 +17,10 @@ worker=None
 keepPlaying = True
 maingrid=None
 innergrid=None
+pathvariable = "data/" 
+#pathvariable = "../itchbox/data/"
 
+######## JOYPAD ###########
 class Signals(QObject):
     close = pyqtSignal(int)
     direction = pyqtSignal(int)
@@ -61,15 +64,67 @@ class Worker(QRunnable):
         #print("stopper joystick")
         pygame.joystick.quit()
  
+######## JOYPAD END ###########
+
+class GameBtn(QPushButton):
+    def __init__(self, index, name, image, command, action, event):
+        global pathvariable
+        super().__init__()
+        pathvariable = "data/" #"../itchbox/data/"
+        self.index = index
+        self.name = name
+        self.image = image
+        img = Image.open(str(pathvariable + image)).convert('L')
+        img.save(str(pathvariable + "_" + image))
+        self.cover = str("border-image: url(" + pathvariable + image + ");")
+        self.uncover = str("border-image: url(" + pathvariable +"_" + image + ");")
+        if (name == "Spegni"):
+            self.command = command
+        else:
+            self.command = str("../itchbox/" + command)
+        self.setStyleSheet(self.uncover)
+        if (name == "Aggiorna") or (name == "Spegni"):
+            self.setIconSize(QSize(60, 60))
+        else:
+            self.setMinimumHeight(350)
+            self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.action = action
+        self.clicked.connect(self.action)
+        self.installEventFilter(event)
+
+    def markObj(self):
+        self.setStyleSheet(self.cover)
+
+    def unmarkObj(self):
+        self.setStyleSheet(self.uncover)
+
+class TxtLabel(QLabel):
+    def __init__(self):
+        super().__init__()
+        self.setFont(QFont("Sanserif", 10))
+        self.setStyleSheet("color: white;")
+        self.setMinimumSize(100, 100)
+
+    def textStart(self, object):
+        if type(object).__name__ == "GameBtn":
+            self.setText("Avvio di "+ object.name + "...")
+        elif type(object).__name__ == "ExitBtn":
+            self.setText("Spegnimento in corso...")
+        elif type(object).__name__ == "UpdateBtn":
+            self.setText("Aggiornamento in corso...")
+            
+    def textShow(self, object):
+        self.setText(object.name)
+
 class Window(QWidget):
     def __init__(self):
-        global num_game, game_list, worker, maingrid, message, innergrid
+        global num_game, game_list, game_index, worker, maingrid, message, innergrid, pathvariable
         super().__init__()
-        self.pathvariable = "data/" #"../itchbox/data/"
+        
         self.centralwidget = QWidget()
         maingrid=QGridLayout(self.centralwidget)
 
-        oImage = QImage(str(self.pathvariable + "sfondo.jpg"))
+        oImage = QImage(str(pathvariable + "sfondo.jpg"))
         #sImage = oImage.scaledToWidth(self.frameGeometry().width())                   # resize Image to widgets size
         palette = QPalette()
         palette.setBrush(QPalette.Window, QBrush(oImage))                        
@@ -82,7 +137,7 @@ class Window(QWidget):
         self.width = 400
         self.height = 300
         self.setWindowTitle(self.title)
-        self.setWindowIcon(QIcon(str(self.pathvariable + "itchbox128.png")))
+        self.setWindowIcon(QIcon(str(pathvariable + "itchbox128.png")))
         self.setGeometry(self.left, self.top, self.width, self.height)
 
         # Riquadro di testo
@@ -91,7 +146,7 @@ class Window(QWidget):
 
         #scroll area per le caselle con i giochi
         self.innerwidget = QWidget()
-        innergrid=QGridLayout()
+        innergrid = QGridLayout() #griglia dei giochi
 
         num_game=self.parse_csv()
 
@@ -119,12 +174,11 @@ class Window(QWidget):
             worker.signals.close.emit(False)
             self.centralwidget.close()
             self.close()
-            #subprocess.call(['sh', game_list[game_index].command])
-
+            #subprocess.call([game_list[game_index].command], '-1')
         elif game_list[game_index].name == "Aggiorna":
             message.textStart(self)
             #subprocess.call(['sh', game_list[game_index].command])
-            self.centralwidget.close()
+            self.innerwidget=[] #distruggi elenco attuale
             self.close()
             self.__init__()
         else:
@@ -152,11 +206,9 @@ class Window(QWidget):
             self.pool.start(worker)
             worker.signals.direction.connect(self.navigation)
             worker.signals.launch.connect(self.start_game)
-            #print("Focus in")
             return True
         if event.type() == QEvent.FocusOut:
             worker.signals.close.emit(False)
-            #print("Focus out")
             return True
         return False
 
@@ -169,23 +221,24 @@ class Window(QWidget):
         message.textShow(game_list[game_index])
 
     def parse_csv(self):
-        global innergrid
-        file1 = open(str(self.pathvariable + 'lista.csv'), 'r')
+        global innergrid, game_index
+        file1 = open(str(pathvariable + 'lista.csv'), 'r')
         i = 0
 
-        for line in file1:
+        for line in file1: #crea tutti i pulsanti a partire dal csv, riga 1 e riga 2 riservati a "aggiorna" e "spegni"
             game = GameBtn(i, line.split(',')[0], line.split(',')[2].strip(), line.split(',')[1], self.start_game, self)
 
-            if i == 0:
+            if i == 2:
                 game.markObj()
+                game_index = 2
 
             game_list.append(game)
             if game.name == "Aggiorna":
-                maingrid.addWidget(game_list[i], 1, 5)
+                maingrid.addWidget(game_list[i], 1, 1)#5)
             elif game.name == "Spegni":
-                maingrid.addWidget(game_list[i], 1, 6)
+                maingrid.addWidget(game_list[i], 1, 2)#6)
             else:
-                innergrid.addWidget(game_list[i], int(i/3), int(i%3))
+                innergrid.addWidget(game_list[i], int((i-2)/3), int((i-2)%3))
             i += 1
 
         file1.close()
