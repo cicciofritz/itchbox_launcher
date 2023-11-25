@@ -91,20 +91,22 @@ class Window(QWidget):
 
         #scroll area per le caselle con i giochi
         self.innerwidget = QWidget()
-        innergrid=QGridLayout(self.innerwidget)
+        innergrid=QGridLayout()
 
         num_game=self.parse_csv()
 
-        self.scrollArea = QScrollArea(self.innerwidget)
-        self.scrollArea.setWidget()
-        self.scrollArea.setLayout(innergrid)
+        self.innerwidget.setLayout(innergrid)
+        self.scrollArea = QScrollArea()
+        self.scrollArea.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.scrollArea.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.scrollArea.setWidgetResizable(True)
+        self.scrollArea.setWidget(self.innerwidget)
+
         maingrid.addWidget(self.scrollArea, 0, 0)
         self.setLayout(maingrid)
         self.installEventFilter(self)
 
         self.show()
-        self.innerwidget.show()
         #self.showFullScreen()
 
     def start_game(self):
@@ -163,6 +165,7 @@ class Window(QWidget):
         game_list[game_index].unmarkObj()
         game_index = (game_index + direction)%(num_game)
         game_list[game_index].markObj()
+        self.scrollArea.ensureWidgetVisible(game_list[game_index], 50, 50)
         message.textShow(game_list[game_index])
 
     def parse_csv(self):

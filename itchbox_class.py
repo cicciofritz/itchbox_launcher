@@ -22,6 +22,7 @@ class GameBtn(QPushButton):
         if (name == "Aggiorna") or (name == "Spegni"):
             self.setIconSize(QSize(60, 60))
         else:
+            self.setMinimumHeight(350)
             self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.action = action
         self.clicked.connect(self.action)
