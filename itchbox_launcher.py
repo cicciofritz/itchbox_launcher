@@ -4,7 +4,7 @@ from PyQt5.QtCore import *
 from PyQt5 import *
 from itchbox_class import *
 
-import sys
+import sys, subprocess
 
 import pygame
 from pygame import *
@@ -53,11 +53,12 @@ class Worker(QRunnable):
             for event in pygame.event.get():
                 if event.type == pygame.JOYBUTTONUP:
                     self.signals.launch.emit(1)
-                    #keepPlaying = False
+                    self.signals.close.emit(False)
                 if event.type == pygame.JOYHATMOTION:
                     i=joysticks[-1].get_hat(0)
                     if i[0] != 0:
                         self.signals.direction.emit(i[0])
+        #print("stopper joystick")
         pygame.joystick.quit()
  
 class Window(QWidget):
@@ -68,7 +69,7 @@ class Window(QWidget):
         self.centralwidget = QWidget()
         maingrid=QGridLayout(self.centralwidget)
 
-        oImage = QImage("sfondo.jpg")
+        oImage = QImage("data/sfondo.jpg")
         #sImage = oImage.scaledToWidth(self.frameGeometry().width())                   # resize Image to widgets size
         palette = QPalette()
         palette.setBrush(QPalette.Window, QBrush(oImage))                        
@@ -81,8 +82,7 @@ class Window(QWidget):
         self.width = 400
         self.height = 300
         self.setWindowTitle(self.title)
-        self.setObjectName('MainWindow')
-        self.setWindowIcon(QIcon("itchbox128.png"))
+        self.setWindowIcon(QIcon("data/itchbox128.png"))
         self.setGeometry(self.left, self.top, self.width, self.height)
 
         # Riquadro di testo
@@ -92,39 +92,42 @@ class Window(QWidget):
         #scroll area per le caselle con i giochi
         self.innerwidget = QWidget()
         innergrid=QGridLayout(self.innerwidget)
-        scrollArea = QScrollArea()
-        scrollArea.setWidget(self.innerwidget)
-        maingrid.addWidget(scrollArea, 0, 0)
 
         num_game=self.parse_csv()
 
-        self.innerwidget.setMinimumSize(600,1000)
-        scrollArea.setLayout(innergrid)
+        self.scrollArea = QScrollArea(self.innerwidget)
+        self.scrollArea.setWidget()
+        self.scrollArea.setLayout(innergrid)
+        self.scrollArea.setWidgetResizable(True)
+        maingrid.addWidget(self.scrollArea, 0, 0)
         self.setLayout(maingrid)
-        
+        self.installEventFilter(self)
+
         self.show()
         self.innerwidget.show()
-
         #self.showFullScreen()
 
     def start_game(self):
-        global message
-        #run game_list[game_index].command
+        global message, worker
+        
         message.textStart(game_list[game_index])
         print(game_list[game_index].name)
- 
-    def btnexit(self):
-        global worker, message
-        message.textStart(self)
-        worker.signals.close.emit(False)
-        self.innerwidget.close()
-        self.close()
+        if game_list[game_index].name == "Spegni":
+            message.textStart(self)
+            worker.signals.close.emit(False)
+            self.centralwidget.close()
+            self.close()
+            #subprocess.call(['sh', game_list[game_index].command])
 
-    def update_game(self):
-        global game_list, message
-        message.textStart(self)
-        self.close()
-        self.__init__() 
+        elif game_list[game_index].name == "Aggiorna":
+            message.textStart(self)
+            #subprocess.call(['sh', game_list[game_index].command])
+            self.centralwidget.close()
+            self.close()
+            self.__init__()
+        else:
+            #subprocess.call(['sh', game_list[game_index].command])
+            pass
 
     def keyPressEvent(self, event): 
         if event.key() == Qt.Key_F11:
@@ -147,9 +150,11 @@ class Window(QWidget):
             self.pool.start(worker)
             worker.signals.direction.connect(self.navigation)
             worker.signals.launch.connect(self.start_game)
+            #print("Focus in")
             return True
         if event.type() == QEvent.FocusOut:
             worker.signals.close.emit(False)
+            #print("Focus out")
             return True
         return False
 
@@ -172,20 +177,15 @@ class Window(QWidget):
                 game.markObj()
 
             game_list.append(game)
-            innergrid.addWidget(game_list[i], int(i/3), int(i%3))
+            if game.name == "Aggiorna":
+                maingrid.addWidget(game_list[i], 1, 5)
+            elif game.name == "Spegni":
+                maingrid.addWidget(game_list[i], 1, 6)
+            else:
+                innergrid.addWidget(game_list[i], int(i/3), int(i%3))
             i += 1
 
         file1.close()
-
-        game_list.append(UpdateBtn(i, self.update_game, self))
-        maingrid.addWidget(game_list[i], 1, 5)
-        
-        i += 1
-
-        game_list.append(ExitBtn(i, self.btnexit, self))
-        maingrid.addWidget(game_list[i], 1, 6)
-        
-        i += 1
 
         return i
 
