@@ -65,11 +65,11 @@ class Window(QWidget):
     def __init__(self):
         global num_game, game_list, worker, maingrid, message, innergrid
         super().__init__()
-
+        self.pathvariable = "data/" #"../itchbox/data/"
         self.centralwidget = QWidget()
         maingrid=QGridLayout(self.centralwidget)
 
-        oImage = QImage("data/sfondo.jpg")
+        oImage = QImage(str(self.pathvariable + "sfondo.jpg"))
         #sImage = oImage.scaledToWidth(self.frameGeometry().width())                   # resize Image to widgets size
         palette = QPalette()
         palette.setBrush(QPalette.Window, QBrush(oImage))                        
@@ -82,7 +82,7 @@ class Window(QWidget):
         self.width = 400
         self.height = 300
         self.setWindowTitle(self.title)
-        self.setWindowIcon(QIcon("data/itchbox128.png"))
+        self.setWindowIcon(QIcon(str(self.pathvariable + "itchbox128.png")))
         self.setGeometry(self.left, self.top, self.width, self.height)
 
         # Riquadro di testo
@@ -170,7 +170,7 @@ class Window(QWidget):
 
     def parse_csv(self):
         global innergrid
-        file1 = open('lista.csv', 'r')
+        file1 = open(str(self.pathvariable + 'lista.csv'), 'r')
         i = 0
 
         for line in file1:
