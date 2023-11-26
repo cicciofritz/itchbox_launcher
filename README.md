@@ -14,4 +14,15 @@ pip install pygame
 
 Eseguire python3 itchbox_launcher.py
 
-Per comodità si apre in modalità finestra.
+Per comodità si apre in modalità finestra. Il tasto F11 permette lo switch tra finestra e tutto schermo.
+
+In attesa di integrazione nel progetto principale, è possibile clonare questo repo accanto al quello [itchbox](https://github.com/carlominucci/itchbox/tree/main)
+
+Il software si aspetta una struttura simile:
+```markdown
+/home/user
+          |__itchbox
+          |         |__data
+          |
+          |__itchbox_launcher
+```
