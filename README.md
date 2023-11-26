@@ -4,6 +4,8 @@ Interfaccia per itchbox [carlominucci/itchbox](https://github.com/carlominucci/i
 
 Versione embrionale in sviluppo, scritta da un novellino principiante. Se ne sconsiglia l'utilizzo.
 
+## Istruzioni
+
 Richiede python3, PyQt5 e pygame
 ```shell
 sudo apt install python3
@@ -26,3 +28,8 @@ Il software si aspetta una struttura simile:
           |
           |__itchbox_launcher
 ```
+
+## Layout
+La finestra principale utilizza il seguente layout:
+
+![itchbox_layout](https://github.com/cicciofritz/itchbox_launcher/assets/19202761/7f63502e-676c-4bd3-9fc0-2c27e89132f7)
