@@ -46,9 +46,15 @@ class Worker(QRunnable):
             clock.tick(20)
             try:
                 for event in pygame.event.get():
-                    if event.type == pygame.JOYBUTTONUP:
-                        self.signals.launch.emit(1)
-                        self.signals.close.emit(False)
+
+                    if event.type == pygame.JOYBUTTONDOWN:
+                        if joysticks[-1].get_button(3) == True: #triangolo
+                            print("premuto triangolo")
+                        elif joysticks[-1].get_button(0) == True: #x
+                            print("premuto x")
+                        else:
+                            self.signals.launch.emit(1)
+                            self.signals.close.emit(False)
                     if event.type == pygame.JOYHATMOTION:
                         i=joysticks[-1].get_hat(0)
                         if i[0] != 0:
@@ -138,7 +144,7 @@ class Window(QWidget):
 
         #inserisco l'elenco dei giochi a una zona scrollabile verticalmente
         self.scrollArea = QScrollArea()
-        self.scrollArea.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.scrollArea.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.scrollArea.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.scrollArea.setWidgetResizable(True)
         self.scrollArea.setWidget(self.innerwidget)
@@ -160,23 +166,23 @@ class Window(QWidget):
     def start_game(self):
         global worker
         
-        self.message.textStart(self.game_list[self.game_index])
-        print(self.game_list[self.game_index].name)
-        if self.game_list[self.game_index].name == "Spegni":
+        self.message.textStart(self.currentGet())
+        print(self.currentGet().name)
+        if self.currentGet().name == "Spegni":
             self.message.textStart(self)
             worker.signals.close.emit(False)
             time.wait(1000) #ritardo per chiudere in maniera pulita il pygame environment
             self.centralwidget.close()
             self.close()
-            #subprocess.call([self.game_list[self.game_index].command], '-1')
-        elif self.game_list[self.game_index].name == "Aggiorna":
+            #subprocess.call([self.currentGet().command], '-1')
+        elif self.currentGet().name == "Aggiorna":
             self.message.textStart(self)
-            #subprocess.call(['sh', self.game_list[self.game_index].command])
+            #subprocess.call(['sh', self.currentGet().command])
             self.innerwidget=[] #distruggi elenco attuale
             self.close()
             self.__init__()
         else:
-            #subprocess.call(['sh', self.game_list[self.game_index].command])
+            #subprocess.call(['sh', self.currentGet().command])
             pass
 
     def keyPressEvent(self, event): 
@@ -190,10 +196,10 @@ class Window(QWidget):
     def eventFilter(self, object, event):
         global worker
         if event.type() == QEvent.HoverMove: #utile solo se si usa il mouse
-            self.game_list[self.game_index].unmarkObj()
+            self.currentGet().unmarkObj()
             self.game_index = object.index
-            self.game_list[self.game_index].markObj()
-            self.message.textShow(self.game_list[self.game_index])
+            self.currentGet().markObj()
+            self.message.textShow(self.currentGet())
             return True
         if event.type() == QEvent.FocusIn: #necessario per riattivare l'uso del gamepad dopo aver chiuso un gioco
             self.pool = QThreadPool.globalInstance()
@@ -208,22 +214,24 @@ class Window(QWidget):
         return False
 
     def navigation(self, direction):
-        self.game_list[self.game_index].unmarkObj()
+        self.currentGet().unmarkObj()
         self.game_index = (self.game_index + direction)%(self.num_game)
-        self.game_list[self.game_index].markObj()
-        self.scrollArea.ensureWidgetVisible(self.game_list[self.game_index], 50, 50) #serve a centrare la scrollarea sul gioco selezionato
-        self.message.textShow(self.game_list[self.game_index])
+        self.currentGet().markObj()
+        self.scrollArea.ensureWidgetVisible(self.currentGet(), 50, 50) #serve a centrare la scrollarea sul gioco selezionato
+        self.message.textShow(self.currentGet())
 
     #funzione principale per lettura file e creazione pulsanti di gioco + aggiorna e spegni
     def parse_csv(self):
         file1 = open(str(pathvariable + 'lista.csv'), 'r')
         i = 0
+        self.game_index = 0
 
         for line in file1: #crea tutti i pulsanti a partire dal csv, riga 1 e riga 2 riservati a "aggiorna" e "spegni"
             game = GameBtn(i, line.split(',')[0], line.split(',')[2].strip(), line.split(',')[1], self.start_game, self)
 
             if i == 2:
                 game.markObj()
+                self.game_index = 2
 
             self.game_list.append(game)
             if game.name == "Aggiorna":
@@ -237,6 +245,10 @@ class Window(QWidget):
         file1.close()
 
         return i
+    
+    def currentGet(self):
+        return self.game_list[self.game_index]
+
 
 if __name__ == "__main__":
     App = QApplication(sys.argv)
