@@ -4,7 +4,7 @@ from PyQt5.QtCore import *
 from PyQt5 import *
 from PIL import Image
 
-import sys, subprocess
+import sys, subprocess, os
 
 import pygame
 from pygame import *
@@ -18,13 +18,14 @@ class Signals(QObject):
     close = pyqtSignal(int)
     direction = pyqtSignal(int)
     launch = pyqtSignal(int)
+    delete = pyqtSignal(int)
 
 class Worker(QRunnable):
 
     def __init__(self):
         super().__init__()
         self.signals = Signals()
-        self.signals.close.connect(self.update) 
+        self.signals.close.connect(self.update)
         self.keepPlaying=True
 
     def update(self):
@@ -50,9 +51,10 @@ class Worker(QRunnable):
                     if event.type == pygame.JOYBUTTONDOWN:
                         if joysticks[-1].get_button(3) == True: #triangolo
                             print("premuto triangolo")
+                            self.signals.delete.emit(1)
+                            self.signals.close.emit(False)
                         elif joysticks[-1].get_button(0) == True: #x
                             print("premuto x")
-                        else:
                             self.signals.launch.emit(1)
                             self.signals.close.emit(False)
                     if event.type == pygame.JOYHATMOTION:
@@ -84,7 +86,8 @@ class GameBtn(QPushButton):
         if (name == "Aggiorna") or (name == "Spegni"):
             self.setIconSize(QSize(60, 60))
         else:
-            self.setMinimumHeight(350)
+            self.setMinimumWidth(350)
+            self.setMaximumHeight(350)
             self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.action = action
         self.clicked.connect(self.action)
@@ -144,24 +147,56 @@ class Window(QWidget):
 
         #inserisco l'elenco dei giochi a una zona scrollabile verticalmente
         self.scrollArea = QScrollArea()
-        self.scrollArea.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.scrollArea.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scrollArea.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scrollArea.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.scrollArea.setWidgetResizable(True)
+        self.scrollArea.setStyleSheet("background: transparent")
         self.scrollArea.setWidget(self.innerwidget)
 
         #riquadro giochi disponibili nella finestra principale
-        self.maingrid.addWidget(self.scrollArea, 0, 0)
+        self.maingrid.addWidget(self.scrollArea, 1, 0)
         self.setLayout(self.maingrid)
         
         #riquadro di testo nella finestra principale
         self.message = TxtLabel()
-        self.maingrid.addWidget(self.message, 1, 0)
+        self.maingrid.addWidget(self.message, 2, 0)
+
+        self.titlewidget = QWidget()
+        self.titlegrid = QGridLayout()
+        self.message2 = TxtLabel()
+        self.message2.setFont(QFont('Arial', 10, QFont.Bold))
+        self.message2.setText(subprocess.check_output(["neofetch", "--stdout"]).decode('ascii'))#, "--disable", "DE", "Theme", "Icons", "WM", "Terminal", "Shell", "Kernel", "Packages", "--off", "--stdout"]).decode('ascii'))
+        self.titlegrid.addWidget(self.message2, 0, 1, Qt.AlignRight)
+        self.titlewidget.setLayout(self.titlegrid)
+        
+        
+        # Configure font and color for the digital clock display
+        self.message3 = TxtLabel()
+        self.message3.setFont(QFont('Arial', 60, QFont.Bold))
+        self.message3.setStyleSheet("color: white;")
+        
+        # Format and display the current time
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.updateTime)
+        self.timer.start(1000)  # Update every 1000 milliseconds (1 second)
+        self.current_time = QTime.currentTime()
+        self.message3.setText(self.current_time.toString('hh:mm:ss'))
+
+        self.titlegrid.addWidget(self.message3, 0, 0, Qt.AlignLeft)
+
+        self.maingrid.addWidget(self.titlewidget, 0, 0)
 
         #aggancio il filtro eventi eventFilter alla finestra principale
         self.installEventFilter(self)
 
         self.show()
         #self.showFullScreen()
+
+    def updateTime(self):
+        self.current_time = QTime.currentTime()
+        #self.current_date = QDate.currentDate()
+        time_str = self.current_time.toString('hh:mm:ss') #+ "\n" + self.current_date.toString()
+        self.message3.setText(time_str)
 
     def start_game(self):
         global worker
@@ -185,6 +220,15 @@ class Window(QWidget):
             #subprocess.call(['sh', self.currentGet().command])
             pass
 
+    def delete_game(self):
+        global worker
+
+        #subprocess.call(['sh', self.currentGet().uninstall])
+        self.innerwidget=[] #distruggi elenco attuale
+        self.close()
+        self.__init__()
+
+
     def keyPressEvent(self, event): 
         if event.key() == Qt.Key_F11:
             if self.isFullScreen():
@@ -207,10 +251,14 @@ class Window(QWidget):
             self.pool.start(worker)
             worker.signals.direction.connect(self.navigation)
             worker.signals.launch.connect(self.start_game)
+            worker.signals.delete.connect(self.delete_game)
             return True
         if event.type() == QEvent.FocusOut: #necessario per spegnere l'uso del gamepad quando il launcher non è in primo piano
             worker.signals.close.emit(False)
             return True
+        if event.type() == QEvent.MouseButtonPress:
+            if event.button() == Qt.RightButton:
+                print("Right button clicked")
         return False
 
     def navigation(self, direction):
@@ -235,11 +283,11 @@ class Window(QWidget):
 
             self.game_list.append(game)
             if game.name == "Aggiorna":
-                self.maingrid.addWidget(self.game_list[i], 1, 1)#5)
+                self.maingrid.addWidget(self.game_list[i], 2, 1)#5)
             elif game.name == "Spegni":
-                self.maingrid.addWidget(self.game_list[i], 1, 2)#6)
+                self.maingrid.addWidget(self.game_list[i], 2, 2)#6)
             else:
-                self.innergrid.addWidget(self.game_list[i], int((i-2)/3), int((i-2)%3))
+                self.innergrid.addWidget(self.game_list[i], 1, i-2)# int((i-2)/3), int((i-2)%3))
             i += 1
 
         file1.close()
