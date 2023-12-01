@@ -13,6 +13,10 @@ sudo apt install python3-pip
 pip install PyQt5
 pip install pygame
 ```
+Opzionale
+```shell
+sudo apt install neofetch
+```
 
 Eseguire python3 itchbox_launcher.py
 
@@ -29,7 +33,3 @@ Il software si aspetta una struttura simile:
           |__itchbox_launcher
 ```
 
-## Layout
-La finestra principale utilizza il seguente layout:
-
-![itchbox_layout](https://github.com/cicciofritz/itchbox_launcher/assets/19202761/7f63502e-676c-4bd3-9fc0-2c27e89132f7)
