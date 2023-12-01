@@ -10,13 +10,18 @@ import pygame
 from pygame import *
 
 worker=None
+
+#impostare il percorso relativo della cartella data
 pathvariable = "data/" 
 #pathvariable = "../itchbox/data/"
+
+#bypass_call se True non esegue gli script sh (lancia gioco, update, disinstalla, spegni)
+bypass_call = True
 
 ######## JOYPAD ###########
 class Signals(QObject):
     close = pyqtSignal(int)
-    direction = pyqtSignal(int)
+    direction = pyqtSignal(int, int)
     launch = pyqtSignal(int)
     delete = pyqtSignal(int)
 
@@ -59,8 +64,8 @@ class Worker(QRunnable):
                             self.signals.close.emit(False)
                     if event.type == pygame.JOYHATMOTION:
                         i=joysticks[-1].get_hat(0)
-                        if i[0] != 0:
-                            self.signals.direction.emit(i[0])
+                        if i[0] != 0 or i[1] != 0:
+                            self.signals.direction.emit(i[0], i[1])
             except:
                 print("Oops")
         pygame.joystick.quit()
@@ -163,27 +168,31 @@ class Window(QWidget):
 
         self.titlewidget = QWidget()
         self.titlegrid = QGridLayout()
-        self.message2 = TxtLabel()
-        self.message2.setFont(QFont('Arial', 10, QFont.Bold))
-        self.message2.setText(subprocess.check_output(["neofetch", "--stdout"]).decode('ascii'))#, "--disable", "DE", "Theme", "Icons", "WM", "Terminal", "Shell", "Kernel", "Packages", "--off", "--stdout"]).decode('ascii'))
-        self.titlegrid.addWidget(self.message2, 0, 1, Qt.AlignRight)
+        self.systxt = TxtLabel()
+        self.systxt.setFont(QFont('Arial', 15, QFont.Bold))
+        self.systxt.setText("Loading...")
+        self.titlegrid.addWidget(self.systxt, 0, 1, Qt.AlignRight)
         self.titlewidget.setLayout(self.titlegrid)
         
-        
         # Configure font and color for the digital clock display
-        self.message3 = TxtLabel()
-        self.message3.setFont(QFont('Arial', 60, QFont.Bold))
-        self.message3.setStyleSheet("color: white;")
+        self.timetxt = TxtLabel()
+        self.timetxt.setFont(QFont('Arial', 60, QFont.Bold))
+        self.timetxt.setStyleSheet("color: white;")
+
+        self.datetxt = TxtLabel()
+        self.datetxt.setFont(QFont('Arial', 20, QFont.Bold))
+        self.datetxt.setStyleSheet("color: white;")
         
         # Format and display the current time
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.updateTime)
         self.timer.start(1000)  # Update every 1000 milliseconds (1 second)
         self.current_time = QTime.currentTime()
-        self.message3.setText(self.current_time.toString('hh:mm:ss'))
-
-        self.titlegrid.addWidget(self.message3, 0, 0, Qt.AlignLeft)
-
+        self.timetxt.setText(self.current_time.toString('hh:mm:ss'))
+        self.current_date = QDate.currentDate()
+        self.datetxt.setText(self.current_date.toString('dddd dd MMMM yy'))
+        self.titlegrid.addWidget(self.timetxt, 0, 0, Qt.AlignLeft)
+        self.titlegrid.addWidget(self.datetxt, 1, 0, Qt.AlignLeft)
         self.maingrid.addWidget(self.titlewidget, 0, 0)
 
         #aggancio il filtro eventi eventFilter alla finestra principale
@@ -194,12 +203,18 @@ class Window(QWidget):
 
     def updateTime(self):
         self.current_time = QTime.currentTime()
-        #self.current_date = QDate.currentDate()
-        time_str = self.current_time.toString('hh:mm:ss') #+ "\n" + self.current_date.toString()
-        self.message3.setText(time_str)
+        self.current_date = QDate.currentDate()
+        time_str = self.current_time.toString('hh:mm:ss')
+        self.timetxt.setText(time_str)
+        date_str = self.current_date.toString('dddd dd MMMM yy')
+        self.datetxt.setText(date_str)
+        try:
+            self.systxt.setText(subprocess.check_output(["neofetch", "--disable", "hostname", "title","de", "theme", "icons", "wm", "term", "shell", "kernel", "packages", "--off", "--stdout"]).decode('ascii'))
+        except:
+            self.systxt.setText("neofetch non installato")
 
     def start_game(self):
-        global worker
+        global worker, bypass_call
         
         self.message.textStart(self.currentGet())
         print(self.currentGet().name)
@@ -209,24 +224,27 @@ class Window(QWidget):
             time.wait(1000) #ritardo per chiudere in maniera pulita il pygame environment
             self.centralwidget.close()
             self.close()
-            #subprocess.call([self.currentGet().command], '-1')
+            if bypass_call == False:
+                subprocess.call([self.currentGet().command], '-1')
         elif self.currentGet().name == "Aggiorna":
             self.message.textStart(self)
-            #subprocess.call(['sh', self.currentGet().command])
+            if bypass_call == False:
+                subprocess.call(['sh', self.currentGet().command])
             self.innerwidget=[] #distruggi elenco attuale
             self.close()
-            self.__init__()
+            self.__init__() #reload windows with new csv file
         else:
-            #subprocess.call(['sh', self.currentGet().command])
-            pass
+            if bypass_call == False:
+                subprocess.call(['sh', self.currentGet().command])
 
     def delete_game(self):
-        global worker
+        global worker, bypass_call
 
-        #subprocess.call(['sh', self.currentGet().uninstall])
+        if bypass_call == False:
+            subprocess.call(['sh', self.currentGet().uninstall])
         self.innerwidget=[] #distruggi elenco attuale
         self.close()
-        self.__init__()
+        self.__init__() #reload windows with new csv file
 
 
     def keyPressEvent(self, event): 
@@ -261,9 +279,14 @@ class Window(QWidget):
                 print("Right button clicked")
         return False
 
-    def navigation(self, direction):
+    def navigation(self, direction, mode):
         self.currentGet().unmarkObj()
         self.game_index = (self.game_index + direction)%(self.num_game)
+        if mode != 0:
+            if self.game_index > 1:
+                self.game_index = 0
+            else:
+                self.game_index = 2
         self.currentGet().markObj()
         self.scrollArea.ensureWidgetVisible(self.currentGet(), 50, 50) #serve a centrare la scrollarea sul gioco selezionato
         self.message.textShow(self.currentGet())
