@@ -2,11 +2,8 @@ from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5 import *
-from PIL import Image
 
-import sys, subprocess, os
-
-import pygame
+import pygame, sys, subprocess
 from pygame import *
 
 worker=None
@@ -78,46 +75,45 @@ class GameBtn(QPushButton):
         super().__init__()
         self.index = index
         self.name = name
-        self.image = image
-        img = Image.open(str(pathvariable + image)).convert('L')
-        img.save(str(pathvariable + "_" + image))
-        self.cover = str("border-image: url(" + pathvariable + image + ");")
-        self.uncover = str("border-image: url(" + pathvariable +"_" + image + ");")
+        self.setStyleSheet(str("border-image: url(" + pathvariable + image + ");"))
+        self.unmarkObj()
         if (name == "Spegni"):
             self.command = command
         else:
             self.command = str("../itchbox/" + command)
-        self.setStyleSheet(self.uncover)
         if (name == "Aggiorna") or (name == "Spegni"):
-            self.setIconSize(QSize(60, 60))
+            self.setMinimumSize(80, 80)
+            self.setMaximumSize(80, 80)
         else:
-            self.setMinimumWidth(350)
+            self.setMinimumSize(350, 350)
             self.setMaximumHeight(350)
-            self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.action = action
-        self.clicked.connect(self.action)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.clicked.connect(action)
         self.installEventFilter(event)
 
     def markObj(self):
-        self.setStyleSheet(self.cover)
+        self.setGraphicsEffect(None)
 
-    def unmarkObj(self):
-        self.setStyleSheet(self.uncover)
+    def unmarkObj(self):        
+        effect = QGraphicsColorizeEffect()
+        effect.setColor(QColor(Qt.gray))
+        effect.setStrength(1)
+        self.setGraphicsEffect(effect)
 
 class TxtLabel(QLabel):
     def __init__(self):
         super().__init__()
-        self.setFont(QFont("Sanserif", 10))
+        self.setFont(QFont("Sanserif", 15))
         self.setStyleSheet("color: white;")
         self.setMinimumSize(100, 100)
 
     def textStart(self, object):
-        if type(object).__name__ == "GameBtn":
-            self.setText("Avvio di "+ object.name + "...")
-        elif type(object).__name__ == "ExitBtn":
+        if object.name == "Spegni":
             self.setText("Spegnimento in corso...")
-        elif type(object).__name__ == "UpdateBtn":
+        elif object.name == "Aggiorna":
             self.setText("Aggiornamento in corso...")
+        else:
+            self.setText("Avvio di "+ object.name + "...")
             
     def textShow(self, object):
         self.setText(object.name)
@@ -147,7 +143,10 @@ class Window(QWidget):
         self.innergrid = QGridLayout() #griglia dei giochi
         self.game_list = []
         self.game_index = 2
-        self.num_game=self.parse_csv() #leggo lista giochi dal csv e li aggiungo al widget
+        try:
+            self.num_game=self.parse_csv() #leggo lista giochi dal csv e li aggiungo al widget
+        except:
+            print("Errore nella lettura del csv")
         self.innerwidget.setLayout(self.innergrid)
 
         #inserisco l'elenco dei giochi a una zona scrollabile verticalmente
@@ -159,7 +158,7 @@ class Window(QWidget):
         self.scrollArea.setWidget(self.innerwidget)
 
         #riquadro giochi disponibili nella finestra principale
-        self.maingrid.addWidget(self.scrollArea, 1, 0)
+        self.maingrid.addWidget(self.scrollArea, 1, 0, 1, 3)
         self.setLayout(self.maingrid)
         
         #riquadro di testo nella finestra principale
@@ -171,7 +170,7 @@ class Window(QWidget):
         self.systxt = TxtLabel()
         self.systxt.setFont(QFont('Arial', 15, QFont.Bold))
         self.systxt.setText("Loading...")
-        self.titlegrid.addWidget(self.systxt, 0, 1, Qt.AlignRight)
+        self.titlegrid.addWidget(self.systxt, 0, 1, 2, 1, Qt.AlignRight)
         self.titlewidget.setLayout(self.titlegrid)
         
         # Configure font and color for the digital clock display
@@ -193,13 +192,13 @@ class Window(QWidget):
         self.datetxt.setText(self.current_date.toString('dddd dd MMMM yy'))
         self.titlegrid.addWidget(self.timetxt, 0, 0, Qt.AlignLeft)
         self.titlegrid.addWidget(self.datetxt, 1, 0, Qt.AlignLeft)
-        self.maingrid.addWidget(self.titlewidget, 0, 0)
+        self.maingrid.addWidget(self.titlewidget, 0, 0, 1, 3)
 
         #aggancio il filtro eventi eventFilter alla finestra principale
         self.installEventFilter(self)
 
         self.show()
-        #self.showFullScreen()
+        self.showFullScreen()
 
     def updateTime(self):
         self.current_time = QTime.currentTime()
@@ -211,7 +210,7 @@ class Window(QWidget):
         try:
             self.systxt.setText(subprocess.check_output(["neofetch", "--disable", "hostname", "title","de", "theme", "icons", "wm", "term", "shell", "kernel", "packages", "--off", "--stdout"]).decode('ascii'))
         except:
-            self.systxt.setText("neofetch non installato")
+            self.systxt.setText("neofetch non installato\n\n\n\n\n\n")
 
     def start_game(self):
         global worker, bypass_call
@@ -219,7 +218,6 @@ class Window(QWidget):
         self.message.textStart(self.currentGet())
         print(self.currentGet().name)
         if self.currentGet().name == "Spegni":
-            self.message.textStart(self)
             worker.signals.close.emit(False)
             time.wait(1000) #ritardo per chiudere in maniera pulita il pygame environment
             self.centralwidget.close()
@@ -227,7 +225,6 @@ class Window(QWidget):
             if bypass_call == False:
                 subprocess.call([self.currentGet().command], '-1')
         elif self.currentGet().name == "Aggiorna":
-            self.message.textStart(self)
             if bypass_call == False:
                 subprocess.call(['sh', self.currentGet().command])
             self.innerwidget=[] #distruggi elenco attuale
