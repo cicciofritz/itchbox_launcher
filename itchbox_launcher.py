@@ -3,8 +3,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5 import *
 
-import pygame, sys, subprocess
-from pygame import *
+import pygame, sys, subprocess, datetime, pickle
 
 worker=None
 
@@ -14,6 +13,9 @@ pathvariable = "data/"
 
 #bypass_call se True non esegue gli script sh (lancia gioco, update, disinstalla, spegni)
 bypass_call = True
+
+#dati di gioco
+playtime = {}
 
 ######## JOYPAD ###########
 class Signals(QObject):
@@ -90,6 +92,13 @@ class GameBtn(QPushButton):
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.clicked.connect(action)
         self.installEventFilter(event)
+        #prova per tempo di gioco
+        self.time_flag=0
+        self.start_time=0
+        if self.name in playtime:
+            self.total_time=playtime[self.name]
+        else:
+            self.total_time=datetime.timedelta(0) #playtime[self.name]
 
     def markObj(self):
         self.setGraphicsEffect(None)
@@ -120,9 +129,17 @@ class TxtLabel(QLabel):
 
 class Window(QWidget):
     def __init__(self):
-        global worker, pathvariable
+        global worker, pathvariable, playtime
         super().__init__()
         
+        #carica dati di gioco
+        try:
+            fileObj = open('data.obj', 'rb')
+            playtime = pickle.load(fileObj)
+            fileObj.close()
+        except:
+            pass
+
         self.centralwidget = QWidget()
         self.maingrid = QGridLayout(self.centralwidget)
 
@@ -165,6 +182,9 @@ class Window(QWidget):
         self.message = TxtLabel()
         self.maingrid.addWidget(self.message, 2, 0)
 
+        self.time = TxtLabel()
+        self.maingrid.addWidget(self.time, 2, 1, Qt.AlignRight)
+
         self.titlewidget = QWidget()
         self.titlegrid = QGridLayout()
         self.systxt = TxtLabel()
@@ -192,7 +212,7 @@ class Window(QWidget):
         self.datetxt.setText(self.current_date.toString('dddd dd MMMM yy'))
         self.titlegrid.addWidget(self.timetxt, 0, 0, Qt.AlignLeft)
         self.titlegrid.addWidget(self.datetxt, 1, 0, Qt.AlignLeft)
-        self.maingrid.addWidget(self.titlewidget, 0, 0, 1, 3)
+        self.maingrid.addWidget(self.titlewidget, 0, 0, 1, 4)
 
         #aggancio il filtro eventi eventFilter alla finestra principale
         self.installEventFilter(self)
@@ -213,13 +233,18 @@ class Window(QWidget):
             self.systxt.setText("neofetch non installato\n\n\n\n\n\n")
 
     def start_game(self):
-        global worker, bypass_call
+        global worker, bypass_call, playtime
         
         self.message.textStart(self.currentGet())
         print(self.currentGet().name)
         if self.currentGet().name == "Spegni":
+            #salvo dati di gioco
+            fileObj = open('data.obj', 'wb')
+            pickle.dump(playtime,fileObj)
+            fileObj.close()
+
             worker.signals.close.emit(False)
-            time.wait(1000) #ritardo per chiudere in maniera pulita il pygame environment
+            pygame.time.wait(1000) #ritardo per chiudere in maniera pulita il pygame environment
             self.centralwidget.close()
             self.close()
             if bypass_call == False:
@@ -231,6 +256,8 @@ class Window(QWidget):
             self.close()
             self.__init__() #reload windows with new csv file
         else:
+            self.currentGet().start_time = datetime.datetime.now()
+            self.currentGet().time_flag = 1
             if bypass_call == False:
                 subprocess.call(['sh', self.currentGet().command])
 
@@ -253,12 +280,13 @@ class Window(QWidget):
 
     #gestore eventi
     def eventFilter(self, object, event):
-        global worker
+        global worker, playtime
         if event.type() == QEvent.HoverMove: #utile solo se si usa il mouse
             self.currentGet().unmarkObj()
             self.game_index = object.index
             self.currentGet().markObj()
             self.message.textShow(self.currentGet())
+            self.time.setText("Giocato per " + str(self.currentGet().total_time))
             return True
         if event.type() == QEvent.FocusIn: #necessario per riattivare l'uso del gamepad dopo aver chiuso un gioco
             self.pool = QThreadPool.globalInstance()
@@ -267,6 +295,11 @@ class Window(QWidget):
             worker.signals.direction.connect(self.navigation)
             worker.signals.launch.connect(self.start_game)
             worker.signals.delete.connect(self.delete_game)
+            end_time = datetime.datetime.now()
+            if self.currentGet().time_flag != 0:
+                self.currentGet().total_time += (end_time - self.currentGet().start_time)
+                playtime[self.currentGet().name] = self.currentGet().total_time
+                self.currentGet().time_flag = 0
             return True
         if event.type() == QEvent.FocusOut: #necessario per spegnere l'uso del gamepad quando il launcher non è in primo piano
             worker.signals.close.emit(False)
@@ -287,6 +320,7 @@ class Window(QWidget):
         self.currentGet().markObj()
         self.scrollArea.ensureWidgetVisible(self.currentGet(), 50, 50) #serve a centrare la scrollarea sul gioco selezionato
         self.message.textShow(self.currentGet())
+        self.time.setText("Giocato per: " + str(self.currentGet().total_time))
 
     #funzione principale per lettura file e creazione pulsanti di gioco + aggiorna e spegni
     def parse_csv(self):
@@ -303,11 +337,11 @@ class Window(QWidget):
 
             self.game_list.append(game)
             if game.name == "Aggiorna":
-                self.maingrid.addWidget(self.game_list[i], 2, 1)#5)
+                self.maingrid.addWidget(self.game_list[i], 2, 2)
             elif game.name == "Spegni":
-                self.maingrid.addWidget(self.game_list[i], 2, 2)#6)
+                self.maingrid.addWidget(self.game_list[i], 2, 3)
             else:
-                self.innergrid.addWidget(self.game_list[i], 1, i-2)# int((i-2)/3), int((i-2)%3))
+                self.innergrid.addWidget(self.game_list[i], 1, i-2)
             i += 1
 
         file1.close()
@@ -321,5 +355,5 @@ class Window(QWidget):
 if __name__ == "__main__":
     App = QApplication(sys.argv)
     window = Window()
-
+    print("ciao")
     sys.exit(App.exec())
