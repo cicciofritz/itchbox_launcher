@@ -228,7 +228,9 @@ class Window(QWidget):
         date_str = self.current_date.toString('dddd dd MMMM yy')
         self.datetxt.setText(date_str)
         try:
-            self.systxt.setText(subprocess.check_output(["neofetch", "--disable", "hostname", "title","de", "theme", "icons", "wm", "term", "shell", "kernel", "packages", "--off", "--stdout"]).decode('ascii'))
+            if bypass_call == False:
+                self.systxt.setText(subprocess.check_output(['sh', '../info.sh']).decode('ascii'))
+            #self.systxt.setText(subprocess.check_output(["neofetch", "--disable", "hostname", "title","de", "theme", "icons", "wm", "term", "shell", "kernel", "packages", "--off", "--stdout"]).decode('ascii'))
         except:
             self.systxt.setText("neofetch non installato\n\n\n\n\n\n")
 
