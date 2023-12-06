@@ -8,11 +8,11 @@ import pygame, sys, subprocess, datetime, pickle
 worker=None
 
 #impostare il percorso relativo della cartella data
-pathvariable = "data/" 
-#pathvariable = "../itchbox/data/"
+datapath = "../itchbox/data/"
+gamepath = "../itchbox/"
 
 #bypass_call se True non esegue gli script sh (lancia gioco, update, disinstalla, spegni)
-bypass_call = True
+bypass_call = False
 
 #dati di gioco
 playtime = {}
@@ -73,11 +73,11 @@ class Worker(QRunnable):
 
 class GameBtn(QPushButton):
     def __init__(self, index, name, image, command, action, event):
-        global pathvariable
+        global datapath
         super().__init__()
         self.index = index
         self.name = name
-        self.setStyleSheet(str("border-image: url(" + pathvariable + image + ");"))
+        self.setStyleSheet(str("border-image: url(" + datapath + image + ");"))
         self.unmarkObj()
         if (name == "Spegni"):
             self.command = command
@@ -87,9 +87,9 @@ class GameBtn(QPushButton):
             self.setMinimumSize(80, 80)
             self.setMaximumSize(80, 80)
         else:
-            self.setMinimumSize(350, 350)
-            self.setMaximumHeight(350)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            h=self.frameGeometry().height()
+            self.setMinimumSize(int(h*315/250), h) #riscalo cercando di mantenere le proporzioni
         self.clicked.connect(action)
         self.installEventFilter(event)
         #prova per tempo di gioco
@@ -129,7 +129,7 @@ class TxtLabel(QLabel):
 
 class Window(QWidget):
     def __init__(self):
-        global worker, pathvariable, playtime
+        global worker, datapath, playtime
         super().__init__()
         
         #carica dati di gioco
@@ -144,7 +144,7 @@ class Window(QWidget):
         self.maingrid = QGridLayout(self.centralwidget)
 
         #sfondo principale
-        oImage = QImage(str(pathvariable + "sfondo.jpg"))
+        oImage = QImage(str(datapath + "sfondo.jpg"))
         palette = QPalette()
         palette.setBrush(QPalette.Window, QBrush(oImage))                        
         self.setPalette(palette)
@@ -152,7 +152,7 @@ class Window(QWidget):
         #proprietà finestra principale
         self.title = "itchbox"
         self.setWindowTitle(self.title)
-        self.setWindowIcon(QIcon(str(pathvariable + "itchbox128.png")))
+        self.setWindowIcon(QIcon(str(datapath + "itchbox128.png")))
         self.setGeometry(500, 200, 600, 400) #almost useless in fullscreenmode
 
         #creo e popolo un widget con i giochi
@@ -227,15 +227,11 @@ class Window(QWidget):
         self.timetxt.setText(time_str)
         date_str = self.current_date.toString('dddd dd MMMM yy')
         self.datetxt.setText(date_str)
-        try:
-            if bypass_call == False:
-                self.systxt.setText(subprocess.check_output(['sh', '../info.sh']).decode('ascii'))
-            #self.systxt.setText(subprocess.check_output(["neofetch", "--disable", "hostname", "title","de", "theme", "icons", "wm", "term", "shell", "kernel", "packages", "--off", "--stdout"]).decode('ascii'))
-        except:
-            self.systxt.setText("neofetch non installato\n\n\n\n\n\n")
+        if bypass_call == False:
+            self.systxt.setText(subprocess.check_output(['sh', '../itchbox/info.sh']).decode('ascii'))
 
     def start_game(self):
-        global worker, bypass_call, playtime
+        global worker, bypass_call, playtime, gamepath
         
         self.message.textStart(self.currentGet())
         print(self.currentGet().name)
@@ -261,7 +257,7 @@ class Window(QWidget):
             self.currentGet().start_time = datetime.datetime.now()
             self.currentGet().time_flag = 1
             if bypass_call == False:
-                subprocess.call(['sh', self.currentGet().command])
+                subprocess.call(['sh', gamepath + self.currentGet().command])
 
     def delete_game(self):
         global worker, bypass_call
@@ -326,7 +322,7 @@ class Window(QWidget):
 
     #funzione principale per lettura file e creazione pulsanti di gioco + aggiorna e spegni
     def parse_csv(self):
-        file1 = open(str(pathvariable + 'lista.csv'), 'r')
+        file1 = open(str(datapath + 'lista.csv'), 'r')
         i = 0
         self.game_index = 0
 
@@ -357,5 +353,5 @@ class Window(QWidget):
 if __name__ == "__main__":
     App = QApplication(sys.argv)
     window = Window()
-    print("ciao")
+
     sys.exit(App.exec())

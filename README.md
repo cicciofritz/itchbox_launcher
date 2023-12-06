@@ -13,10 +13,7 @@ sudo apt install python3-pip
 pip install PyQt5
 pip install pygame
 ```
-Opzionale
-```shell
-sudo apt install neofetch
-```
+
 
 Eseguire python3 itchbox_launcher.py
 
