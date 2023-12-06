@@ -79,10 +79,7 @@ class GameBtn(QPushButton):
         self.name = name
         self.setStyleSheet(str("border-image: url(" + datapath + image + ");"))
         self.unmarkObj()
-        if (name == "Spegni"):
-            self.command = command
-        else:
-            self.command = str("../itchbox/" + command)
+        self.command = command
         if (name == "Aggiorna") or (name == "Spegni"):
             self.setMinimumSize(80, 80)
             self.setMaximumSize(80, 80)
@@ -246,7 +243,8 @@ class Window(QWidget):
             self.centralwidget.close()
             self.close()
             if bypass_call == False:
-                subprocess.call([self.currentGet().command], '-1')
+                #subprocess.call([self.currentGet().command])
+                pass
         elif self.currentGet().name == "Aggiorna":
             if bypass_call == False:
                 subprocess.call(['sh', self.currentGet().command])
